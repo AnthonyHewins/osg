@@ -1,8 +1,7 @@
 package fetch
 
 import (
-	"archive/zip"
-	"archive/tar"
+	"os"
 	"path/filepath"
 )
 
@@ -18,21 +17,13 @@ var blacklist_extensions = map[string]bool {
 	".mp3":  true,
 	".jpg":  true,
 	".jpeg": true,
-	".md":   true, // readmes are typically not going to be filled with deception
+	".md":   true, // readmes are typically not going to be filled with deceptive code
 }
 
-func filter_zip(header *zip.FileHeader) bool {
-	return !blacklisted(&header.Name)
-}
+func whitelisted(metadata os.FileInfo) bool {
+	if metadata.IsDir() { return true }
 
-func filter_tar(header *tar.Header) bool {
-	if header.Typeflag != tar.TypeReg { return false }
-	return !blacklisted(&header.Name)
-}
-
-func blacklisted(file *string) bool {
-	filename := filepath.Base(*file)
-
+	filename := metadata.Name()
 	return blacklist_files[filename] ||
 		blacklist_extensions[filepath.Ext(filename)]
 }

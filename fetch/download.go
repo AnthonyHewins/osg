@@ -8,7 +8,7 @@ import (
 
 const tmpfile_name = "osg-repo-*"
 
-func download_to_temp(uri *string) (string, error) {
+func download_to_tmp(uri *string) (string, error) {
 	resp, err := http.Get(*uri)
 	if err != nil { return tmpfile_name, err }
 

@@ -1,30 +1,48 @@
 package fetch
 
-import (
-	"log"
-)
+type File struct {
+	Name string
+	Contents []byte
+}
 
-// TODO add github capabilities and the API
-func StartDataPipeline(uri *string, pipeline chan File) {
-	location, err := where_to_go(uri)
-	if err != nil { log.Fatalln(err) }
-
-	switch location {
-	case LOCAL_DIRECTORY:
-		crawl_dir(uri, pipeline)
-	case LOCAL_TAR:
-		inflate_tar(*uri, pipeline)
-	case LOCAL_ZIP:
-		inflate_zip(*uri, pipeline)
-	case REMOTE_ZIP:
-		filename, err := download_to_temp(uri)
-		if err != nil { log.Fatalln(err) }
-
-		inflate_zip(filename, pipeline)
-	case REMOTE_TAR:
-		filename, err := download_to_temp(uri)
-		if err != nil { log.Fatalln(err) }
-
-		inflate_tar(filename, pipeline)
+func RemoteRepoTar(url *string, files chan File, errors chan error) {
+	if tmpfile := remote_download(url, files, errors); tmpfile != nil {
+		LocalRepoTar(tmpfile, files, errors)
 	}
+}
+
+func RemoteRepoZip(url *string, files chan File, errors chan error) {
+	if tmpfile := remote_download(url, files, errors); tmpfile != nil {
+		LocalRepoZip(tmpfile, files, errors)
+	}
+}
+
+func LocalRepoZip(path *string, files chan File, errors chan error) {
+	crawl_zip(path, files, errors)
+	close_pipes(files, errors)
+}
+
+func LocalRepoTar(path *string, files chan File, errors chan error) {
+	crawl_tar(path, files, errors)
+	close_pipes(files, errors)
+}
+
+func LocalRepoDir(path *string, files chan File, errors chan error) {
+	crawl_dir(path, files, errors)
+	close_pipes(files, errors)
+}
+
+func remote_download(url *string, files chan File, errors chan error) *string {
+	if tmpfile, err := download_to_tmp(url); err != nil {
+		errors <- err
+		close_pipes(files, errors)
+		return nil
+	} else {
+		return &tmpfile
+	}
+}
+
+func close_pipes(files chan File, errors chan error) {
+		close(files)
+		close(errors)
 }

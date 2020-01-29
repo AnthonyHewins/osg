@@ -21,96 +21,104 @@ import (
 	"compress/gzip"
 )
 
-type File struct {
-	Name string
-	Contents []byte
-}
-
-func crawl_dir(path *string, pipeline chan File) {
-	err := filepath.Walk(*path,
+func crawl_dir(path *string, files chan File, errors chan error) {
+	filepath.Walk(*path,
 		func(path string, info os.FileInfo, err error) error {
-			if err != nil { return err }
+			if err != nil {
+				errors <- err
+				return nil
+			}
 
-			if info.IsDir() { return nil }
+			if whitelisted(info) { return nil }
 
-			filename := info.Name()
-			if blacklisted(&filename) { return nil }
-
-			absolute_path, err := filepath.Abs(path)
-			if err != nil { return err }
-
-			file_ptr, err := os.Open(absolute_path)
-			if err != nil { return err }
+			file_ptr, err := os.Open(path)
+			if err != nil {
+				errors <- err
+				return nil
+			}
 
 			buf, err := ioutil.ReadAll(file_ptr)
-			if err != nil { return err }
+			if err != nil {
+				errors <- err
+				return nil
+			}
 
-			pipeline <- File{filename, buf}
+			files <- File{info.Name(), buf}
 			return nil
 		},
 	)
-
-	if err != nil { log.Fatalln(err) }
-
-	close(pipeline)
 }
 
-//
-func inflate_zip(filename string, pipeline chan File) {
-	r, err := zip.OpenReader(filename)
-	if err != nil { log.Fatalln(err) }
+func crawl_zip(filename *string, files chan File, errors chan error) {
+	r, err := zip.OpenReader(*filename)
+	if err != nil {
+		log.Fatalln(err)
+	}
 
 	defer r.Close()
 
 	for _, reader := range r.File {
-		if filter_zip(&reader.FileHeader) {
-			current_file, err := reader.Open()
-
-			if err != nil { log.Fatalf("couldn't open (filename is '%v'?): %v", current_file, err) }
-
-			buf, err := ioutil.ReadAll(current_file)
-			if err != nil { log.Fatalf("ran into error reading file %v: %v", current_file, err) }
-
-			todo := File{reader.FileHeader.Name, buf}
-			pipeline <- todo
+		if os_fileinfo := reader.FileHeader.FileInfo(); whitelisted(os_fileinfo) {
+			continue
 		}
-	}
 
-	close(pipeline)
+		current_file, err := reader.Open()
+		if err != nil {
+			errors <- err
+			continue
+		}
+
+		buf, err := ioutil.ReadAll(current_file)
+		if err != nil {
+			errors <- err
+			continue
+		}
+
+		files <- File{reader.FileHeader.Name, buf}
+	}
 }
 
-func inflate_tar(filename string, pipeline chan File) {
-	f, err := os.Open(filename)
-	if err != nil { log.Fatalln(err) }
+func crawl_tar(filename *string, files chan File, errors chan error) {
+	f, err := os.Open(*filename)
+	if err != nil {
+		errors <- err
+		return
+	}
 
 	defer f.Close()
 
 	gzf, err := gzip.NewReader(f)
-	if err != nil { log.Fatalln(err) }
+	if err != nil {
+		errors <- err
+		return
+	}
+
+	defer gzf.Close()
 
 	tarReader := tar.NewReader(gzf)
 
 	for {
 		header, err := tarReader.Next()
 
-		if err == io.EOF { break            }
-		if err != nil    { log.Fatalln(err) }
+		switch err {
+		case io.EOF:
+			return
+		case nil:
+			// no-op, this case means nothing's wrong
+		default:
+			errors <- err
+			continue
+		}
 
-		if filter_tar(header) {
+		if whitelisted(header.FileInfo()) {
+			continue
+		}
 
-			data := make([]byte, header.Size)
-			_, err := tarReader.Read(data)
-
-			switch err {
-			case io.EOF:
-				pipeline <- File{ header.Name, data }
-			case nil:
-				continue
-			default:
-				log.Fatalln(err)
-			}
+		data := make([]byte, header.Size)
+		if _, err := tarReader.Read(data); err == io.EOF {
+			files <- File{ header.Name, data }
+		} else if err != nil {
+			errors <- err
 		}
 	}
-
-	close(pipeline)
 }
