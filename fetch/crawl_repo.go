@@ -1,10 +1,21 @@
+// This file exposes several functions that do one of the following:
+//
+//   1. Inflate compressed media that was downloaded or is stored locally in-place,
+//      buffering one file at a time in memory, and sending it down the pipe
+//   2. Scanning a dir for files, reading them to the end, then sending those down the pipe
+//
+// The files are prepared using the struct below for later processing. Note some are filtered out.
+
 package fetch
 
 import (
 	"os"
-	"io/ioutil"
-	"io"
 	"log"
+
+	"io"
+	"io/ioutil"
+	"path/filepath"
+
 	"archive/zip"
 	"archive/tar"
 	"compress/gzip"
@@ -15,9 +26,39 @@ type File struct {
 	Contents []byte
 }
 
+func crawl_dir(path *string, pipeline chan File) {
+	err := filepath.Walk(*path,
+		func(path string, info os.FileInfo, err error) error {
+			if err != nil { return err }
+
+			if info.IsDir() { return nil }
+
+			filename := info.Name()
+			if blacklisted(&filename) { return nil }
+
+			absolute_path, err := filepath.Abs(path)
+			if err != nil { return err }
+
+			file_ptr, err := os.Open(absolute_path)
+			if err != nil { return err }
+
+			buf, err := ioutil.ReadAll(file_ptr)
+			if err != nil { return err }
+
+			pipeline <- File{filename, buf}
+			return nil
+		},
+	)
+
+	if err != nil { log.Fatalln(err) }
+
+	close(pipeline)
+}
+
+//
 func inflate_zip(filename string, pipeline chan File) {
 	r, err := zip.OpenReader(filename)
-	if err != nil { log.Fatalf("ran into zip error: %v\n", err) }
+	if err != nil { log.Fatalln(err) }
 
 	defer r.Close()
 

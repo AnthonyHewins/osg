@@ -9,7 +9,7 @@ import (
 
 // Commandline options
 type config struct {
-	Repo string `opts:"help=github URL"`
+	Repo string `opts:"mode=arg,name=URI,help=URI\t\t\tURL or local path to a repository (or zip/tar with a repository)"`
 }
 
 func main() {

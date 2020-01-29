@@ -6,11 +6,9 @@ import (
 	"io/ioutil"
 )
 
-const (
-	tmpfile_name = "osg-repo-*"
-)
+const tmpfile_name = "osg-repo-*"
 
-func download(uri *string, file_extension CompressionType) (string, error) {
+func download_to_temp(uri *string) (string, error) {
 	resp, err := http.Get(*uri)
 	if err != nil { return tmpfile_name, err }
 

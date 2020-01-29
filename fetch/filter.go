@@ -10,14 +10,15 @@ import (
 // loaded from external source or something
 var blacklist_files = map[string]bool{
 	".gitignore": true,
+	".gitattributes": true,
 }
 
 var blacklist_extensions = map[string]bool {
-	".png": true,
-	".mp3": true,
-	".jpg": true,
+	".png":  true,
+	".mp3":  true,
+	".jpg":  true,
 	".jpeg": true,
-	".md": true,      // readmes are typically not going to be filled with deception
+	".md":   true, // readmes are typically not going to be filled with deception
 }
 
 func filter_zip(header *zip.FileHeader) bool {
