@@ -10,6 +10,8 @@ import (
 var blacklist_files = map[string]bool{
 	".gitignore": true,
 	".gitattributes": true,
+	"Cargo.toml": true,
+	"Cargo.lock": true,
 }
 
 var blacklist_extensions = map[string]bool {

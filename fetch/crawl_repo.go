@@ -21,6 +21,8 @@ import (
 	"compress/gzip"
 )
 
+type Crawlable = func(*string, chan File, chan error)
+
 func crawl_dir(path *string, files chan File, errors chan error) {
 	filepath.Walk(*path,
 		func(path string, info os.FileInfo, err error) error {
@@ -43,7 +45,7 @@ func crawl_dir(path *string, files chan File, errors chan error) {
 				return nil
 			}
 
-			files <- File{info.Name(), buf}
+			files <- File{path, buf}
 			return nil
 		},
 	)
@@ -107,6 +109,11 @@ func crawl_tar(filename *string, files chan File, errors chan error) {
 			// no-op, this case means nothing's wrong
 		default:
 			errors <- err
+			continue
+		}
+
+		// PAX headers (XHeaders) are just file permissions, which we don't care about
+		if header.Typeflag == tar.TypeXHeader || header.Typeflag == tar.TypeXGlobalHeader {
 			continue
 		}
 
