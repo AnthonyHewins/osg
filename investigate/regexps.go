@@ -12,5 +12,5 @@ var url_regex = regexp.MustCompile(
 // Be sure to use stemming, ie dont use analytics, use analytic
 // Also it's case insensitive by default
 var suspicious_words = regexp.MustCompile(
-	"(?i)(analytic|telemetry)+",
+	"(?i)(analytic|telemetr)+",
 )

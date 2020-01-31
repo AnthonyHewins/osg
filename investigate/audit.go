@@ -16,39 +16,59 @@ func StartAuditPipeline(file_pipe chan fetch.Option, audit_pipe chan Option) {
 			return
 		}
 
-		file := option.File
-		lines := strings.Split(string(file.Contents), "\n")
+		file  := option.File
 
+		// 0. Prepare ourselves for performing two tasks async
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		// 1. Scan the source code asynchronously, results in this array
 		var src_concerns []SrcConcern
-		for lineno, line := range lines {
-			var bitmask Reason
-			var wg_for_src sync.WaitGroup
+		go scan_src(&file.Contents, &src_concerns, &wg)
 
-			wg_for_src.Add(2)
-			go contains_url(&line, &bitmask, &wg_for_src)
-			go contains_suspicious_word(&line, &bitmask, &wg_for_src)
-			wg_for_src.Wait()
+		// 2. Scan the metadata asynchronously, results in this Reason (a uint8)
+		var metadata_concerns Reason
+		go scan_metadata(file, &metadata_concerns, &wg)
 
-			if bitmask > 0 {
-				src_concerns = append(
-					src_concerns,
-					SrcConcern{uint64(lineno) + 1, line, bitmask},
-				)
-			}
-		}
+		// 3. Wait til 1 and 2 are done, then proceed...
+		wg.Wait()
 
-		filename_suspicious := uint8(0) //contains_suspicious_word(&file.Name)
-
-		if int(filename_suspicious) | len(src_concerns) <= 0 { continue }
+		if int(metadata_concerns) | len(src_concerns) <= 0 { continue }
 
 		audit := FileAudit{
 			File: file,
-			MetadataConcerns: filename_suspicious,
+			MetadataConcerns: metadata_concerns,
 			SrcConcerns: src_concerns,
 		}
 
 		audit_pipe <- Option{FileAudit: &audit, Err: nil}
 	}
+}
+
+func scan_src(buf *[]byte, src_concerns *[]SrcConcern, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	lines := strings.Split(string(*buf), "\n")
+	for lineno, line := range lines {
+		var bitmask Reason
+		var wg_for_checking_in_parallel sync.WaitGroup
+
+		wg_for_checking_in_parallel.Add(2)
+		go contains_url(&line, &bitmask, &wg_for_checking_in_parallel)
+		go contains_suspicious_word(&line, &bitmask, &wg_for_checking_in_parallel)
+		wg_for_checking_in_parallel.Wait()
+
+		if bitmask > 0 {
+			*src_concerns = append(
+				*src_concerns,
+				SrcConcern{uint64(lineno) + 1, line, bitmask},
+			)
+		}
+	}
+}
+
+func scan_metadata(f *fetch.File, metadata_concerns *Reason, wg *sync.WaitGroup) {
+	contains_suspicious_word(&f.Name, metadata_concerns, wg)
 }
 
 func contains_url(line *string, bitmask *Reason, wg *sync.WaitGroup) {
