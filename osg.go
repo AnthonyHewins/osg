@@ -5,6 +5,7 @@ import (
 	"sudo-bangbang.com/osg/investigate"
 	"github.com/jpillora/opts"
 	"fmt"
+	"os"
 )
 
 // Commandline options
@@ -28,16 +29,20 @@ func main() {
 	if c.RemoteZip != "" { start(&c.RemoteZip, fetch.RemoteRepoZip); return }
 }
 
-func start(identifier *string, fn func(*string, chan fetch.File, chan error)) {
-	files  := make(chan fetch.File)
-	errors := make(chan error)
+func start(identifier *string, fn func(*string, chan fetch.Option)) {
+	files  := make(chan fetch.Option)
 
-	go fn(identifier, files, errors)
+	go fn(identifier, files)
 
-	file_audit_pipe := make(chan investigate.FileAudit)
+	file_audit_pipe := make(chan investigate.Option)
 	go investigate.StartAuditPipeline(files, file_audit_pipe)
 
 	for audit_report := range file_audit_pipe {
-		fmt.Print(audit_report)
+		if audit_report.Err != nil {
+			fmt.Println(audit_report.Err)
+			os.Exit(1)
+		}
+
+		fmt.Print(audit_report.FileAudit)
 	}
 }

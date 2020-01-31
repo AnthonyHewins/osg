@@ -10,7 +10,6 @@ package fetch
 
 import (
 	"os"
-	"log"
 
 	"io"
 	"io/ioutil"
@@ -21,41 +20,29 @@ import (
 	"compress/gzip"
 )
 
-type Crawlable = func(*string, chan File, chan error)
+type Crawlable = func(*string, chan Option) error
 
-func crawl_dir(path *string, files chan File, errors chan error) {
-	filepath.Walk(*path,
+func crawl_dir(path *string, files chan Option) error {
+	return filepath.Walk(*path,
 		func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				errors <- err
-				return nil
-			}
-
-			if whitelisted(info) { return nil }
+			if err != nil || whitelisted(info) { return err }
 
 			file_ptr, err := os.Open(path)
-			if err != nil {
-				errors <- err
-				return nil
-			}
+			if err != nil { return err }
 
 			buf, err := ioutil.ReadAll(file_ptr)
-			if err != nil {
-				errors <- err
-				return nil
-			}
+			if err != nil { return err }
 
-			files <- File{path, buf}
+			f := File{path, buf}
+			files <- Option{File: &f, Err: nil}
 			return nil
 		},
 	)
 }
 
-func crawl_zip(filename *string, files chan File, errors chan error) {
+func crawl_zip(filename *string, files chan Option) error {
 	r, err := zip.OpenReader(*filename)
-	if err != nil {
-		log.Fatalln(err)
-	}
+	if err != nil { return err }
 
 	defer r.Close()
 
@@ -65,35 +52,26 @@ func crawl_zip(filename *string, files chan File, errors chan error) {
 		}
 
 		current_file, err := reader.Open()
-		if err != nil {
-			errors <- err
-			continue
-		}
+		if err != nil { return err }
 
 		buf, err := ioutil.ReadAll(current_file)
-		if err != nil {
-			errors <- err
-			continue
-		}
+		if err != nil { return err }
 
-		files <- File{reader.FileHeader.Name, buf}
+		f := File{reader.FileHeader.Name, buf}
+		files <- Option{File: &f, Err: err}
 	}
+
+	return nil
 }
 
-func crawl_tar(filename *string, files chan File, errors chan error) {
+func crawl_tar(filename *string, files chan Option) error {
 	f, err := os.Open(*filename)
-	if err != nil {
-		errors <- err
-		return
-	}
+	if err != nil { return err }
 
 	defer f.Close()
 
 	gzf, err := gzip.NewReader(f)
-	if err != nil {
-		errors <- err
-		return
-	}
+	if err != nil { return err }
 
 	defer gzf.Close()
 
@@ -104,28 +82,28 @@ func crawl_tar(filename *string, files chan File, errors chan error) {
 
 		switch err {
 		case io.EOF:
-			return
+			return nil
 		case nil:
 			// no-op, this case means nothing's wrong
 		default:
-			errors <- err
-			continue
+			return err
 		}
 
-		// PAX headers (XHeaders) are just file permissions, which we don't care about
-		if header.Typeflag == tar.TypeXHeader || header.Typeflag == tar.TypeXGlobalHeader {
-			continue
-		}
+		// PAX headers (XHeaders shown below) are just file permissions, which we don't care about
+		this_is_case_we_dont_care_about := header.Typeflag == tar.TypeXHeader ||
+			header.Typeflag == tar.TypeXGlobalHeader ||
+			whitelisted(header.FileInfo())
 
-		if whitelisted(header.FileInfo()) {
+		if this_is_case_we_dont_care_about {
 			continue
 		}
 
 		data := make([]byte, header.Size)
 		if _, err := tarReader.Read(data); err == io.EOF {
-			files <- File{ header.Name, data }
+			f := File{ header.Name, data }
+			files <- Option{File: &f, Err: err}
 		} else if err != nil {
-			errors <- err
+			return err
 		}
 	}
 }

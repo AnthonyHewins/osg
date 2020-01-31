@@ -8,11 +8,15 @@ import (
 
 type Reason = uint8
 
-// These are bit flags. They are logically OR'd together to produce a state machine of why
 const (
 	URL             = 1 << iota
 	SUSPICIOUS_WORD = 1 << iota // examples such as "Analytics" case insensitive appearing in the source file
 )
+
+type Option struct {
+	FileAudit *FileAudit
+	Err error
+}
 
 type FileAudit struct {
 	File              *fetch.File

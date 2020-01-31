@@ -2,55 +2,65 @@ package investigate
 
 import (
 	"strings"
+	"sync"
 	"sudo-bangbang.com/osg/fetch"
 )
 
 // TODO split on the byte value of \n and reduce the cost of audit
-func StartAuditPipeline(file_pipe chan fetch.File, audit_pipe chan FileAudit) {
-	for file := range file_pipe {
+func StartAuditPipeline(file_pipe chan fetch.Option, audit_pipe chan Option) {
+	defer close(audit_pipe)
+
+	for option := range file_pipe {
+		if option.Err != nil {
+			audit_pipe <- Option{FileAudit: nil, Err: option.Err}
+			return
+		}
+
+		file := option.File
 		lines := strings.Split(string(file.Contents), "\n")
 
 		var src_concerns []SrcConcern
 		for lineno, line := range lines {
 			var bitmask Reason
+			var wg_for_src sync.WaitGroup
 
-			bitmask =           contains_url(&line)
-			bitmask = bitmask | contains_suspicious_word(&line)
+			wg_for_src.Add(2)
+			go contains_url(&line, &bitmask, &wg_for_src)
+			go contains_suspicious_word(&line, &bitmask, &wg_for_src)
+			wg_for_src.Wait()
 
 			if bitmask > 0 {
 				src_concerns = append(
 					src_concerns,
-					SrcConcern{uint64(lineno), line, bitmask},
+					SrcConcern{uint64(lineno) + 1, line, bitmask},
 				)
 			}
 		}
 
-		filename_suspicious := contains_suspicious_word(&file.Name)
+		filename_suspicious := uint8(0) //contains_suspicious_word(&file.Name)
 
 		if int(filename_suspicious) | len(src_concerns) <= 0 { continue }
 
-		audit_pipe <- FileAudit{
-			File: &file,
+		audit := FileAudit{
+			File: file,
 			MetadataConcerns: filename_suspicious,
 			SrcConcerns: src_concerns,
 		}
-	}
 
-	close(audit_pipe)
+		audit_pipe <- Option{FileAudit: &audit, Err: nil}
+	}
 }
 
-func contains_url(line *string) Reason {
+func contains_url(line *string, bitmask *Reason, wg *sync.WaitGroup) {
+	defer wg.Done()
 	if url_regex.MatchString(*line) {
-		return URL
+		*bitmask = *bitmask | URL
 	}
-
-	return 0
 }
 
-func contains_suspicious_word(line *string) Reason {
+func contains_suspicious_word(line *string, bitmask *Reason, wg *sync.WaitGroup) {
+	defer wg.Done()
 	if suspicious_words.MatchString(*line) {
-		return SUSPICIOUS_WORD
+		*bitmask = *bitmask | SUSPICIOUS_WORD
 	}
-
-	return 0
 }
