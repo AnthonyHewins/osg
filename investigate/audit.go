@@ -1,7 +1,7 @@
 package investigate
 
 import (
-	"strings"
+	"bytes"
 	"sync"
 	"sudo-bangbang.com/osg/fetch"
 )
@@ -48,7 +48,7 @@ func StartAuditPipeline(file_pipe chan fetch.Option, audit_pipe chan Option) {
 func scan_src(buf *[]byte, src_concerns *[]SrcConcern, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	lines := strings.Split(string(*buf), "\n")
+	lines := bytes.Split(*buf, []byte("\n"))
 	for lineno, line := range lines {
 		var bitmask Reason
 		var wg_for_checking_in_parallel sync.WaitGroup
@@ -61,26 +61,27 @@ func scan_src(buf *[]byte, src_concerns *[]SrcConcern, wg *sync.WaitGroup) {
 		if bitmask > 0 {
 			*src_concerns = append(
 				*src_concerns,
-				SrcConcern{uint64(lineno) + 1, line, bitmask},
+				SrcConcern{uint64(lineno) + 1, string(line), bitmask},
 			)
 		}
 	}
 }
 
 func scan_metadata(f *fetch.File, metadata_concerns *Reason, wg *sync.WaitGroup) {
-	contains_suspicious_word(&f.Name, metadata_concerns, wg)
+	byte_array_of_name := []byte(f.Name)
+	contains_suspicious_word(&byte_array_of_name, metadata_concerns, wg)
 }
 
-func contains_url(line *string, bitmask *Reason, wg *sync.WaitGroup) {
+func contains_url(line *[]byte, bitmask *Reason, wg *sync.WaitGroup) {
 	defer wg.Done()
-	if url_regex.MatchString(*line) {
+	if url_regex.Match(*line) {
 		*bitmask = *bitmask | URL
 	}
 }
 
-func contains_suspicious_word(line *string, bitmask *Reason, wg *sync.WaitGroup) {
+func contains_suspicious_word(line *[]byte, bitmask *Reason, wg *sync.WaitGroup) {
 	defer wg.Done()
-	if suspicious_words.MatchString(*line) {
+	if suspicious_words.Match(*line) {
 		*bitmask = *bitmask | SUSPICIOUS_WORD
 	}
 }
