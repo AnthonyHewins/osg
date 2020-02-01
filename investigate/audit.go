@@ -6,7 +6,6 @@ import (
 	"sudo-bangbang.com/osg/fetch"
 )
 
-// TODO split on the byte value of \n and reduce the cost of audit
 func StartAuditPipeline(file_pipe chan fetch.Option, audit_pipe chan Option) {
 	defer close(audit_pipe)
 
@@ -75,7 +74,7 @@ func scan_metadata(f *fetch.File, metadata_concerns *Reason, wg *sync.WaitGroup)
 func contains_url(line *[]byte, bitmask *Reason, wg *sync.WaitGroup) {
 	defer wg.Done()
 	if url_regex.Match(*line) {
-		*bitmask = *bitmask | URL
+		*bitmask = *bitmask | INET
 	}
 }
 

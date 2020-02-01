@@ -10,6 +10,18 @@ type File struct {
 	Contents []byte
 }
 
+func GithubRepo(user, repo string, branch *string, pipeline chan Option) {
+	url, _, err := get_github_repo_url(user, repo, branch)
+
+	if err != nil {
+		pipeline <- Option{File: nil, Err: err}
+		return
+	}
+
+	urlstring := url.String()
+	RemoteRepoZip(&urlstring, pipeline)
+}
+
 func RemoteRepoTar(url *string, pipeline chan Option) {
 	remote_download_and_read(url, pipeline, crawl_tar)
 }

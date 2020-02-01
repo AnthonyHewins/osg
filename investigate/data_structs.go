@@ -9,7 +9,7 @@ import (
 type Reason = uint8
 
 const (
-	URL             = 1 << iota
+	INET             = 1 << iota
 	SUSPICIOUS_WORD = 1 << iota // examples such as "Analytics" case insensitive appearing in the source file
 )
 
@@ -47,7 +47,7 @@ type SrcConcern struct {
 func (sc SrcConcern) String() string {
 	var reason strings.Builder
 
-	if URL             & sc.Reason > 0 { reason.WriteString("URL,") }
+	if INET            & sc.Reason > 0 { reason.WriteString("INET,")      }
 	if SUSPICIOUS_WORD & sc.Reason > 0 { reason.WriteString("SUSP_WORD,") }
 
 	return fmt.Sprintf("%v: %v (%v)", sc.Lineno, sc.Line, reason.String())
