@@ -9,7 +9,7 @@ import (
 type Reason = uint8
 
 const (
-	INET             = 1 << iota
+	INET            = 1 << iota
 	SUSPICIOUS_WORD = 1 << iota // examples such as "Analytics" case insensitive appearing in the source file
 )
 

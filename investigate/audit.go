@@ -53,8 +53,8 @@ func scan_src(buf *[]byte, src_concerns *[]SrcConcern, wg *sync.WaitGroup) {
 		var wg_for_checking_in_parallel sync.WaitGroup
 
 		wg_for_checking_in_parallel.Add(2)
-		go contains_url(&line, &bitmask, &wg_for_checking_in_parallel)
-		go contains_suspicious_word(&line, &bitmask, &wg_for_checking_in_parallel)
+		go containsURL(&line, &bitmask, &wg_for_checking_in_parallel)
+		go containsSuspiciousWord(&line, &bitmask, &wg_for_checking_in_parallel)
 		wg_for_checking_in_parallel.Wait()
 
 		if bitmask > 0 {
@@ -68,17 +68,17 @@ func scan_src(buf *[]byte, src_concerns *[]SrcConcern, wg *sync.WaitGroup) {
 
 func scan_metadata(f *fetch.File, metadata_concerns *Reason, wg *sync.WaitGroup) {
 	byte_array_of_name := []byte(f.Name)
-	contains_suspicious_word(&byte_array_of_name, metadata_concerns, wg)
+	containsSuspiciousWord(&byte_array_of_name, metadata_concerns, wg)
 }
 
-func contains_url(line *[]byte, bitmask *Reason, wg *sync.WaitGroup) {
+func containsURL(line *[]byte, bitmask *Reason, wg *sync.WaitGroup) {
 	defer wg.Done()
 	if url_regex.Match(*line) {
 		*bitmask = *bitmask | INET
 	}
 }
 
-func contains_suspicious_word(line *[]byte, bitmask *Reason, wg *sync.WaitGroup) {
+func containsSuspiciousWord(line *[]byte, bitmask *Reason, wg *sync.WaitGroup) {
 	defer wg.Done()
 	if suspicious_words.Match(*line) {
 		*bitmask = *bitmask | SUSPICIOUS_WORD
